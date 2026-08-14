@@ -1,17 +1,23 @@
 const express = require('express');
 const proxy = require('express-http-proxy');
+const https = require('https');
 const app = express();
 
-// Ye endpoint aapko Render ka exact Fixed IP bata dega
-app.get('/my-ip', async (req, res) => {
-  try {
-    const fetch = (await import('node-fetch')).default;
-    const response = await fetch('https://api.ipify.org?format=json');
-    const data = await response.json();
-    res.send(`Render Outbound IP: ${data.ip}`);
-  } catch (err) {
-    res.status(500).send('Error fetching IP');
-  }
+app.get('/my-ip', (req, res) => {
+  https.get('https://api.ipify.org?format=json', (externalRes) => {
+    let data = '';
+    externalRes.on('data', (chunk) => { data += chunk; });
+    externalRes.on('end', () => {
+      try {
+        const parsed = JSON.parse(data);
+        res.send(`Render Outbound IP: ${parsed.ip}`);
+      } catch (e) {
+        res.status(500).send('Parsing error');
+      }
+    });
+  }).on('error', (err) => {
+    res.status(500).send('Error fetching IP: ' + err.message);
+  });
 });
 
 app.use('/v1', proxy('https://api.clashofclans.com', {
